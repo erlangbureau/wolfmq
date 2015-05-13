@@ -96,21 +96,28 @@ process_queue(_Table, '$end_of_table') ->
     ok;
 process_queue(Table, Key) ->
     _ = case ets:lookup(Table, Key) of
-        [{Key, {Fun, Args}}] ->
-            try erlang:apply(Fun, Args) of
-                ok -> ets:delete(Table, Key);
-                _  -> error
-            catch _Class:_Reason ->
-                ets:delete(Table, Key)
-            end;
-        [{Key, {Module, Fun, Args}}] ->
-            try erlang:apply(Module, Fun, Args) of
-                ok -> ets:delete(Table, Key);
-                _  -> error
-            catch _Class:_Reason ->
-                ets:delete(Table, Key)
+        [{Key, Msg}] ->
+            case execute(Msg) of
+                ok        -> ets:delete(Table, Key);
+                error     -> ok;
+                exception -> ets:delete(Table, Key)
             end;
         _ ->
             ets:delete(Table, Key)
     end,
     process_queue(Table, ets:first(Table)).
+
+execute({Module, Fun, Args}) ->
+    try erlang:apply(Module, Fun, Args) of
+        ok -> ok;
+        _ -> error
+    catch
+        _Class:_Reason -> exception
+    end;
+execute({Fun, Args}) ->
+    try erlang:apply(Fun, Args) of
+        ok -> ok;
+        _ -> error
+    catch
+        _Class:_Reason -> exception
+    end.
