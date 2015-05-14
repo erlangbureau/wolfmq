@@ -4,6 +4,7 @@
 %% API
 -export([start_link/0]).
 -export([push/2]).
+-export([open_queue/2, close_queue/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -23,6 +24,14 @@ push(QueueId, Task) ->
             ok
     end,
     add_to_queue(QueueId, Task).
+
+open_queue(QueueId, {EtsId, HandlerPid}) ->
+    true = ets:insert(wolfmq_queues, {QueueId, EtsId, HandlerPid}),
+    ok.
+
+close_queue(QueueId) ->
+    true = ets:delete(wolfmq_queues, QueueId),
+    ok.
 
 %% gen_server callbacks
 init(_Args) ->

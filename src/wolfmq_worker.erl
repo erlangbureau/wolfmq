@@ -30,7 +30,7 @@ init([QueueId]) ->
     IdleTimeout = timer:seconds(Secs),
     HandlerPid = self(),
     EtsId = ets:new(?T, [public, ordered_set, {write_concurrency, true}]),
-    true = ets:insert(wolfmq_queues, {QueueId, EtsId, HandlerPid}),
+    ok = wolfmq_mgr:open_queue(QueueId, {EtsId, HandlerPid}),
     {ok, ActivityTimerRef} = timer:send_after(1000, process_queue),
     {ok, #state{activity_timer = ActivityTimerRef, 
                 idle_timeout = IdleTimeout,
@@ -44,7 +44,7 @@ handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
 
 handle_cast(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    true = ets:delete(wolfmq_queues, QueueId),
+    ok = wolfmq_mgr:close_queue(QueueId),
     ok = process_queue(EtsId),
     true = ets:delete(EtsId),
     {stop, normal, State}.
@@ -67,7 +67,7 @@ handle_info(process_queue, #state{activity_timer = ActivityTimerRef,
         idle_timer = IdleTimerRef2},
     {noreply, Sate2};
 handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    true = ets:delete(wolfmq_queues, QueueId),
+    ok = wolfmq_mgr:close_queue(QueueId),
     ok = process_queue(EtsId),
     true = ets:delete(EtsId),
     {stop, normal, State};
