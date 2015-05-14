@@ -60,7 +60,13 @@ is_existing_queue(QueueId) ->
         [{QueueId, _, HandlerPid}] -> is_process_alive(HandlerPid)
     end.
 
+add_to_queue(QueueId, Tasks) when is_list(Tasks) ->
+    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    List = [{now(), Task} || Task <- Tasks],
+    true = ets:insert(EtsId, List),
+    ok;
 add_to_queue(QueueId, Task) ->
     [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
-    true = ets:insert(EtsId, {now(), Task}),
+    Tuple = {now(), Task},
+    true = ets:insert(EtsId, Tuple),
     ok.
