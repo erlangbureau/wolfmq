@@ -1,6 +1,6 @@
 {application, wolfmq, [
     {description, "Erlang message broker"},
-    {vsn, {id, "git"}},
+    {vsn, "0.2.0"},
     {modules, []},
     {registered, []},
     {applications, [
