@@ -11,7 +11,7 @@ Getting Started
 %% Push
 1> QueueId = 1.
 1
-2> ok = wolfmq:push(QueueId, {io, format, ["Some non printed text~n", []]}).
+2> ok = wolfmq:push(QueueId, {io, format, ["Some text~n", []]}).
 ok
 
 ```

@@ -70,12 +70,50 @@ is_existing_queue(QueueId) ->
     end.
 
 add_to_queue(QueueId, Tasks) when is_list(Tasks) ->
+    Now = erlang_system_time(micro_seconds),
     [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
-    List = [{now(), Task} || Task <- Tasks],
+    List = [{Now, Task} || Task <- Tasks],
     true = ets:insert(EtsId, List),
     ok;
 add_to_queue(QueueId, Task) ->
+    Now = erlang_system_time(micro_seconds),
     [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
-    Tuple = {now(), Task},
+    Tuple = {Now, Task},
     true = ets:insert(EtsId, Tuple),
     ok.
+
+%% erlang:system_time fallback functions
+erlang_system_time(Unit) ->
+    try erlang:system_time(Unit)
+    catch
+        error:badarg ->
+	        erlang:error(badarg, [Unit]);
+        error:undef ->
+            STime = erlang_system_time_fallback(),
+            try
+                convert_time_unit_fallback(STime, native, Unit)
+            catch
+                error:bad_time_unit -> erlang:error(badarg, [Unit])
+            end
+    end.
+
+erlang_system_time_fallback() ->
+    Module = erlang, %% To suppress warning
+    {MS, S, US} = Module:now(),
+    (MS*1000000+S)*1000000+US.
+
+convert_time_unit_fallback(Time, FromUnit, ToUnit) ->
+    FU = integer_time_unit(FromUnit),
+    TU = integer_time_unit(ToUnit),
+    case Time < 0 of
+	    true -> TU*Time - (FU - 1);
+	    false -> TU*Time
+    end div FU.
+
+integer_time_unit(native) -> 1000*1000;
+integer_time_unit(nano_seconds) -> 1000*1000*1000;
+integer_time_unit(micro_seconds) -> 1000*1000;
+integer_time_unit(milli_seconds) -> 1000;
+integer_time_unit(seconds) -> 1;
+integer_time_unit(I) when is_integer(I), I > 0 -> I;
+integer_time_unit(BadRes) -> erlang:error(bad_time_unit, [BadRes]).

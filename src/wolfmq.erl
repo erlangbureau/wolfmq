@@ -1,7 +1,6 @@
 -module(wolfmq).
 
 %% API
--export([start/0, stop/0]).
 -export([push/1, push/2]).
 
 %% API
