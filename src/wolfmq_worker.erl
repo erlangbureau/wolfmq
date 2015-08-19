@@ -26,16 +26,19 @@ stop(Pid) ->
 
 %% gen_server callbacks
 init([QueueId]) ->
-    Secs = application:get_env(hts, queue_idle_timeout, 10),
+    {ok, Secs} = application:get_env(wolfmq, idle_timeout),
     IdleTimeout = timer:seconds(Secs),
     HandlerPid = self(),
     EtsId = ets:new(?T, [public, ordered_set, {write_concurrency, true}]),
     ok = wolfmq_mgr:open_queue(QueueId, {EtsId, HandlerPid}),
     {ok, ActivityTimerRef} = timer:send_after(1000, process_queue),
-    {ok, #state{activity_timer = ActivityTimerRef, 
-                idle_timeout = IdleTimeout,
-                queue_id = QueueId,
-                ets_id = EtsId}}.
+    State = #state{
+        activity_timer = ActivityTimerRef, 
+        idle_timeout = IdleTimeout,
+        queue_id = QueueId,
+        ets_id = EtsId
+    },
+    {ok, State}.
 
 terminate(_Reason, _State) ->
     ok.

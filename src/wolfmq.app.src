@@ -8,5 +8,7 @@
         stdlib
     ]},
     {mod, {wolfmq_app, []}},
-    {env, []}
+    {env, [
+        {idle_timeout, 10}
+    ]}
 ]}.

@@ -16,12 +16,12 @@ init([]) ->
     WorkersSup = {
         wolfmq_workers_sup,
         {wolfmq_workers_sup, start_link, []},
-		transient, 5000, supervisor, [wolfmq_workers_sup]
+		transient, infinity, supervisor, [wolfmq_workers_sup]
     },
     QueueMgr = {
         wolfmq_mgr,
         {wolfmq_mgr, start_link, []},
-		permanent, 100, worker, [wolfmq_mgr]
+		permanent, 1000, worker, [wolfmq_mgr]
     },
     Procs = [WorkersSup, QueueMgr],
-    {ok, { {one_for_one, 5, 10}, Procs} }.
+    {ok, { {one_for_one, 100, 1}, Procs} }.
