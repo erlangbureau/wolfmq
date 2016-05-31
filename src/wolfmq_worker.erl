@@ -123,4 +123,11 @@ execute({Fun, Args}) ->
         _ -> error
     catch
         _Class:_Reason -> exception
+    end;
+execute(Fun) when is_function(Fun) ->
+    try Fun() of
+        ok -> ok;
+        _ -> error
+    catch
+        _Class:_Reason -> exception
     end.
