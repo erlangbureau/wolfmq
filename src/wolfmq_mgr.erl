@@ -71,15 +71,17 @@ is_existing_queue(QueueId) ->
 
 add_to_queue(QueueId, Tasks) when is_list(Tasks) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
     List = [{Now, Task} || Task <- Tasks],
     true = ets:insert(EtsId, List),
+    force_queue_processing(EtsId, HandlerPid),
     ok;
 add_to_queue(QueueId, Task) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
     Tuple = {Now, Task},
     true = ets:insert(EtsId, Tuple),
+    force_queue_processing(EtsId, HandlerPid),
     ok.
 
 %% erlang:system_time fallback functions
@@ -117,3 +119,13 @@ integer_time_unit(milli_seconds) -> 1000;
 integer_time_unit(seconds) -> 1;
 integer_time_unit(I) when is_integer(I), I > 0 -> I;
 integer_time_unit(BadRes) -> erlang:error(bad_time_unit, [BadRes]).
+
+
+force_queue_processing(EtsId, HandlerPid) ->
+    case ets:info(EtsId, size) of
+        N when N < 2 ->
+            HandlerPid ! process_queue,
+            ok;
+        _ ->
+            ok
+    end.
