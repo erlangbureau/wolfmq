@@ -9,8 +9,6 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
--define(PROCESSING_START_LATENCY, application:get_env(wolfmq, latency, 1000)).
-
 -define(T, ?MODULE).
 -record(state, {
     activity_timer,
@@ -58,7 +56,8 @@ handle_info(process_queue, #state{activity_timer = ActivityTimerRef,
         idle_timer = IdleTimerRef1, idle_timeout = IdleTimeout, 
         ets_id = EtsId} = State) ->
     {ok, cancel} = timer:cancel(ActivityTimerRef),
-    IdleTimerRef2 = case ets:info(EtsId, size) of
+    EtsInfoList = ets:info(EtsId),
+    IdleTimerRef2 = case proplists:get_value(size, EtsInfoList) of
         Size when Size > 0 ->
             {ok, cancel} = cancel_idle_timer(IdleTimerRef1),
             ok = process_queue(EtsId),
@@ -66,8 +65,9 @@ handle_info(process_queue, #state{activity_timer = ActivityTimerRef,
         _ ->
             start_idle_timer(IdleTimerRef1, IdleTimeout)
     end,
-    {ok, ActivityTimerRef2} = timer:send_after(?PROCESSING_START_LATENCY, process_queue),
-    Sate2 = State#state{activity_timer = ActivityTimerRef2, 
+    DefaultLatency          = application:get_env(wolfmq, latency, 1000),
+    {ok, ActivityTimerRef2} = timer:send_after(DefaultLatency, process_queue),
+    Sate2 = State#state{activity_timer = ActivityTimerRef2,
         idle_timer = IdleTimerRef2},
     {noreply, Sate2};
 handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
