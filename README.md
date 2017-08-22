@@ -24,5 +24,5 @@ ok
 
 Project Chat Room
 =================
-[![Gitter](https://badges.gitter.im/Join Chat.svg)](https://gitter.im/erlangbureau/wolfmq?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/erlangbureau/wolfmq)
 
