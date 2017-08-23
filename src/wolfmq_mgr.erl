@@ -71,14 +71,16 @@ is_existing_queue(QueueId) ->
 
 add_to_queue(QueueId, Tasks) when is_list(Tasks) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
     List = [{Now, Task} || Task <- Tasks],
+    force_queue_processing(EtsId, HandlerPid),
     true = ets:insert(EtsId, List),
     ok;
 add_to_queue(QueueId, Task) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
     Tuple = {Now, Task},
+    force_queue_processing(EtsId, HandlerPid),
     true = ets:insert(EtsId, Tuple),
     ok.
 
@@ -117,3 +119,19 @@ integer_time_unit(milli_seconds) -> 1000;
 integer_time_unit(seconds) -> 1;
 integer_time_unit(I) when is_integer(I), I > 0 -> I;
 integer_time_unit(BadRes) -> erlang:error(bad_time_unit, [BadRes]).
+
+
+force_queue_processing(EtsId, HandlerPid) ->
+    TabInfo = ets:info(EtsId),
+    case proplists:get_value(size, TabInfo) of
+        undefined ->
+            ok;
+        JobsWaitProcessing ->
+            force(JobsWaitProcessing, HandlerPid)
+    end.
+
+force(0, HandlerPid) ->
+    HandlerPid ! process_queue,
+    ok;
+force(_, _) ->
+    ok.

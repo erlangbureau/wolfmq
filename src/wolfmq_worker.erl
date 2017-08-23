@@ -31,7 +31,7 @@ init([QueueId]) ->
     HandlerPid = self(),
     EtsId = ets:new(?T, [public, ordered_set, {write_concurrency, true}]),
     ok = wolfmq_mgr:open_queue(QueueId, {EtsId, HandlerPid}),
-    {ok, ActivityTimerRef} = timer:send_after(1000, process_queue),
+    {ok, ActivityTimerRef} = timer:send_after(0, process_queue),
     State = #state{
         activity_timer = ActivityTimerRef, 
         idle_timeout = IdleTimeout,
@@ -65,8 +65,9 @@ handle_info(process_queue, #state{activity_timer = ActivityTimerRef,
         _ ->
             start_idle_timer(IdleTimerRef1, IdleTimeout)
     end,
-    {ok, ActivityTimerRef2} = timer:send_after(1000, process_queue),
-    Sate2 = State#state{activity_timer = ActivityTimerRef2, 
+    DefaultLatency          = application:get_env(wolfmq, latency, 1000),
+    {ok, ActivityTimerRef2} = timer:send_after(DefaultLatency, process_queue),
+    Sate2 = State#state{activity_timer = ActivityTimerRef2,
         idle_timer = IdleTimerRef2},
     {noreply, Sate2};
 handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
