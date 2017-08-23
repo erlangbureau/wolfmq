@@ -3,6 +3,7 @@
 
 %% API
 -export([start_link/1, stop/1]).
+-export([force_processing/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -11,11 +12,13 @@
 
 -define(T, ?MODULE).
 -record(state, {
-    activity_timer,
+    heartbeat_timer,
     idle_timer,
+    heartbeat_timeout,
     idle_timeout,
     queue_id,
-    ets_id}).
+    ets_id
+}).
 
 %% API
 start_link(Args) ->
@@ -24,19 +27,23 @@ start_link(Args) ->
 stop(Pid) ->
     gen_server:cast(Pid, stop).
 
+force_processing(Pid) ->
+    Pid ! process_queue,
+    ok.
+
 %% gen_server callbacks
 init([QueueId]) ->
-    {ok, Secs} = application:get_env(wolfmq, idle_timeout),
-    IdleTimeout = timer:seconds(Secs),
-    HandlerPid = self(),
+    {ok, HeartbeatTimeout}  = application:get_env(wolfmq, heartbeat_timeout),
+    {ok, IdleTimeout}       = application:get_env(wolfmq, idle_timeout),
     EtsId = ets:new(?T, [public, ordered_set, {write_concurrency, true}]),
-    ok = wolfmq_mgr:open_queue(QueueId, {EtsId, HandlerPid}),
-    {ok, ActivityTimerRef} = timer:send_after(1000, process_queue),
+    ok = wolfmq_mgr:open_queue(QueueId, {EtsId, self()}),
+    {ok, HeartbeatTimerRef}  = timer:send_after(0, process_queue),
     State = #state{
-        activity_timer = ActivityTimerRef, 
-        idle_timeout = IdleTimeout,
-        queue_id = QueueId,
-        ets_id = EtsId
+        heartbeat_timer     = HeartbeatTimerRef,
+        heartbeat_timeout   = timer:seconds(HeartbeatTimeout),
+        idle_timeout        = timer:seconds(IdleTimeout),
+        queue_id            = QueueId,
+        ets_id              = EtsId
     },
     {ok, State}.
 
@@ -51,13 +58,12 @@ handle_cast(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
     ok = process_queue(EtsId),
     true = ets:delete(EtsId),
     {stop, normal, State}.
-                                                                
-handle_info(process_queue, #state{activity_timer = ActivityTimerRef, 
-        idle_timer = IdleTimerRef1, idle_timeout = IdleTimeout, 
-        ets_id = EtsId} = State) ->
-    {ok, cancel} = timer:cancel(ActivityTimerRef),
-    EtsInfoList = ets:info(EtsId),
-    IdleTimerRef2 = case proplists:get_value(size, EtsInfoList) of
+
+handle_info(process_queue, #state{heartbeat_timer = HeartbeatTimerRef,
+        idle_timer = IdleTimerRef1, idle_timeout = IdleTimeout,
+        heartbeat_timeout = HeartbeatTimeout, ets_id = EtsId} = State) ->
+    {ok, cancel} = timer:cancel(HeartbeatTimerRef),
+    IdleTimerRef2 = case ets:info(EtsId, size) of
         Size when Size > 0 ->
             {ok, cancel} = cancel_idle_timer(IdleTimerRef1),
             ok = process_queue(EtsId),
@@ -65,9 +71,11 @@ handle_info(process_queue, #state{activity_timer = ActivityTimerRef,
         _ ->
             start_idle_timer(IdleTimerRef1, IdleTimeout)
     end,
-    {ok, ActivityTimerRef2} = timer:send_after(1000, process_queue),
-    Sate2 = State#state{activity_timer = ActivityTimerRef2, 
-        idle_timer = IdleTimerRef2},
+    {ok, HeartbeatTimerRef2} = timer:send_after(HeartbeatTimeout, process_queue),
+    Sate2 = State#state{
+        heartbeat_timer = HeartbeatTimerRef2,
+        idle_timer      = IdleTimerRef2
+    },
     {noreply, Sate2};
 handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
     ok = wolfmq_mgr:close_queue(QueueId),

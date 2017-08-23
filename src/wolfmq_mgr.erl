@@ -25,8 +25,8 @@ push(QueueId, Task) ->
     end,
     add_to_queue(QueueId, Task).
 
-open_queue(QueueId, {EtsId, HandlerPid}) ->
-    true = ets:insert(wolfmq_queues, {QueueId, EtsId, HandlerPid}),
+open_queue(QueueId, {EtsId, WorkerPid}) ->
+    true = ets:insert(wolfmq_queues, {QueueId, EtsId, WorkerPid}),
     ok.
 
 close_queue(QueueId) ->
@@ -66,20 +66,27 @@ terminate(_Reason, _State) ->
 is_existing_queue(QueueId) ->
     case ets:lookup(wolfmq_queues, QueueId) of
         [] -> false;
-        [{QueueId, _, HandlerPid}] -> is_process_alive(HandlerPid)
+        [{QueueId, _, WorkerPid}] -> is_process_alive(WorkerPid)
     end.
 
 add_to_queue(QueueId, Tasks) when is_list(Tasks) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, WorkerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    QueueSize = ets:info(EtsId, size),
     List = [{Now, Task} || Task <- Tasks],
     true = ets:insert(EtsId, List),
-    ok;
+    force_processing(WorkerPid, QueueSize);
 add_to_queue(QueueId, Task) ->
     Now = erlang_system_time(micro_seconds),
-    [{QueueId, EtsId, _HandlerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    [{QueueId, EtsId, WorkerPid}] = ets:lookup(wolfmq_queues, QueueId),
+    QueueSize = ets:info(EtsId, size),
     Tuple = {Now, Task},
     true = ets:insert(EtsId, Tuple),
+    force_processing(WorkerPid, QueueSize).
+
+force_processing(WorkerPid, 0) ->
+    wolfmq_worker:force_processing(WorkerPid);
+force_processing(_, _) ->
     ok.
 
 %% erlang:system_time fallback functions
