@@ -35,8 +35,8 @@ force_processing(Pid) ->
 init([QueueId]) ->
     {ok, HeartbeatTimeout}  = application:get_env(wolfmq, heartbeat_timeout),
     {ok, IdleTimeout}       = application:get_env(wolfmq, idle_timeout),
-    EtsId = ets:new(?T, [public, ordered_set, {write_concurrency, true}]),
-    ok = wolfmq_mgr:open_queue(QueueId, {EtsId, self()}),
+    EtsId = wolfmq_queue:create(),
+    ok = wolfmq_meta:open_queue(QueueId, {EtsId, self()}),
     {ok, HeartbeatTimerRef}  = timer:send_after(0, process_queue),
     State = #state{
         heartbeat_timer     = HeartbeatTimerRef,
@@ -54,22 +54,22 @@ handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
 
 handle_cast(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    ok = wolfmq_mgr:close_queue(QueueId),
-    ok = process_queue(EtsId),
-    true = ets:delete(EtsId),
+    ok = wolfmq_meta:close_queue(QueueId),
+    ok = wolfmq_queue:map(EtsId, fun execute/1),
+    ok = wolfmq_queue:destroy(EtsId),
     {stop, normal, State}.
 
 handle_info(process_queue, #state{heartbeat_timer = HeartbeatTimerRef,
         idle_timer = IdleTimerRef1, idle_timeout = IdleTimeout,
         heartbeat_timeout = HeartbeatTimeout, ets_id = EtsId} = State) ->
     {ok, cancel} = timer:cancel(HeartbeatTimerRef),
-    IdleTimerRef2 = case ets:info(EtsId, size) of
-        Size when Size > 0 ->
+    IdleTimerRef2 = case wolfmq_queue:is_empty(EtsId) of
+        true ->
+            start_idle_timer(IdleTimerRef1, IdleTimeout);
+        false ->
             {ok, cancel} = cancel_idle_timer(IdleTimerRef1),
-            ok = process_queue(EtsId),
-            undefined;
-        _ ->
-            start_idle_timer(IdleTimerRef1, IdleTimeout)
+            ok = wolfmq_queue:map(EtsId, fun execute/1),
+            undefined
     end,
     {ok, HeartbeatTimerRef2} = timer:send_after(HeartbeatTimeout, process_queue),
     Sate2 = State#state{
@@ -78,9 +78,9 @@ handle_info(process_queue, #state{heartbeat_timer = HeartbeatTimerRef,
     },
     {noreply, Sate2};
 handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    ok = wolfmq_mgr:close_queue(QueueId),
-    ok = process_queue(EtsId),
-    true = ets:delete(EtsId),
+    ok = wolfmq_meta:close_queue(QueueId),
+    ok = wolfmq_queue:map(EtsId, fun execute/1),
+    ok = wolfmq_queue:destroy(EtsId),
     {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -99,24 +99,6 @@ cancel_idle_timer(undefined) ->
     {ok, cancel};
 cancel_idle_timer(TimerRef) ->
     timer:cancel(TimerRef).
-
-process_queue(Table) ->
-    process_queue(Table, ets:first(Table)).
-
-process_queue(_Table, '$end_of_table') ->
-    ok;
-process_queue(Table, Key) ->
-    _ = case ets:lookup(Table, Key) of
-        [{Key, Msg}] ->
-            case execute(Msg) of
-                ok        -> ets:delete(Table, Key);
-                error     -> ok;
-                exception -> ets:delete(Table, Key)
-            end;
-        _ ->
-            ets:delete(Table, Key)
-    end,
-    process_queue(Table, ets:first(Table)).
 
 execute({Module, Fun, Args}) ->
     try erlang:apply(Module, Fun, Args) of
