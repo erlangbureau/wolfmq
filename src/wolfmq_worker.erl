@@ -16,59 +16,72 @@
     idle_timer,
     heartbeat_timeout,
     idle_timeout,
-    queue_id,
-    ets_id
+    external_queue_id,
+    internal_queue_id,
+    handler
 }).
 
 %% API
 start_link(Args) ->
-    gen_server:start_link(?MODULE, [Args], []).
+    gen_server:start_link(?MODULE, Args, []).
 
 stop(Pid) ->
-    gen_server:cast(Pid, stop).
+    gen_server:stop(Pid).
 
 force_processing(Pid) ->
     Pid ! process_queue,
     ok.
 
 %% gen_server callbacks
-init([QueueId]) ->
+init([ExternalQueueId, Opts]) ->
     {ok, HeartbeatTimeout}  = application:get_env(wolfmq, heartbeat_timeout),
     {ok, IdleTimeout}       = application:get_env(wolfmq, idle_timeout),
-    EtsId = wolfmq_queue:create(),
-    ok = wolfmq_meta:open_queue(QueueId, {EtsId, self()}),
-    {ok, HeartbeatTimerRef}  = timer:send_after(0, process_queue),
+    InternalQueueId         = wolfmq_queue:create(),
+    ok = wolfmq_queues_catalog:insert(ExternalQueueId, {InternalQueueId, self()}),
+    {ok, HeartbeatTimerRef} = timer:send_after(0, process_queue),
     State = #state{
         heartbeat_timer     = HeartbeatTimerRef,
         heartbeat_timeout   = timer:seconds(HeartbeatTimeout),
         idle_timeout        = timer:seconds(IdleTimeout),
-        queue_id            = QueueId,
-        ets_id              = EtsId
+        external_queue_id   = ExternalQueueId,
+        internal_queue_id   = InternalQueueId,
+        handler             = maps:get(handler, Opts, wolfmq_task_handler)
     },
     {ok, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+    ExternalQueueId = State#state.external_queue_id,
+    InternalQueueId = State#state.internal_queue_id,
+    Handler         = State#state.handler,
+    ok = wolfmq_queues_catalog:delete(ExternalQueueId),
+    HandleFun = fun Handler:handle_message/1,
+    ok = wolfmq_queue:map(InternalQueueId, HandleFun),
+    ok = wolfmq_queue:destroy(InternalQueueId),
     ok.
 
 handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
 
-handle_cast(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    ok = wolfmq_meta:close_queue(QueueId),
-    ok = wolfmq_queue:map(EtsId, fun execute/1),
-    ok = wolfmq_queue:destroy(EtsId),
-    {stop, normal, State}.
+handle_cast(stop, State) ->
+    {stop, normal, State};
+handle_cast(_Msg, State) ->
+    {noreply, ignore, State}.
 
-handle_info(process_queue, #state{heartbeat_timer = HeartbeatTimerRef,
-        idle_timer = IdleTimerRef1, idle_timeout = IdleTimeout,
-        heartbeat_timeout = HeartbeatTimeout, ets_id = EtsId} = State) ->
+handle_info(process_queue, State) ->
+    HeartbeatTimerRef   = State#state.heartbeat_timer,
+    IdleTimerRef1       = State#state.idle_timer,
+    IdleTimeout         = State#state.idle_timeout,
+    HeartbeatTimeout    = State#state.heartbeat_timeout,
+    InternalQueueId     = State#state.internal_queue_id,
+    Handler             = State#state.handler,
     {ok, cancel} = timer:cancel(HeartbeatTimerRef),
-    IdleTimerRef2 = case wolfmq_queue:is_empty(EtsId) of
+    IdleTimerRef2 = case wolfmq_queue:is_empty(InternalQueueId) of
         true ->
             start_idle_timer(IdleTimerRef1, IdleTimeout);
         false ->
             {ok, cancel} = cancel_idle_timer(IdleTimerRef1),
-            ok = wolfmq_queue:map(EtsId, fun execute/1),
+            HandleFun = fun Handler:handle_message/1,
+            ok = wolfmq_queue:map(InternalQueueId, HandleFun),
             undefined
     end,
     {ok, HeartbeatTimerRef2} = timer:send_after(HeartbeatTimeout, process_queue),
@@ -77,10 +90,7 @@ handle_info(process_queue, #state{heartbeat_timer = HeartbeatTimerRef,
         idle_timer      = IdleTimerRef2
     },
     {noreply, Sate2};
-handle_info(stop, #state{ets_id = EtsId, queue_id = QueueId} = State) ->
-    ok = wolfmq_meta:close_queue(QueueId),
-    ok = wolfmq_queue:map(EtsId, fun execute/1),
-    ok = wolfmq_queue:destroy(EtsId),
+handle_info(stop, State) ->
     {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -99,25 +109,3 @@ cancel_idle_timer(undefined) ->
     {ok, cancel};
 cancel_idle_timer(TimerRef) ->
     timer:cancel(TimerRef).
-
-execute({Module, Fun, Args}) ->
-    try erlang:apply(Module, Fun, Args) of
-        ok -> ok;
-        _ -> error
-    catch
-        _Class:_Reason -> exception
-    end;
-execute({Fun, Args}) ->
-    try erlang:apply(Fun, Args) of
-        ok -> ok;
-        _ -> error
-    catch
-        _Class:_Reason -> exception
-    end;
-execute(Fun) when is_function(Fun) ->
-    try Fun() of
-        ok -> ok;
-        _ -> error
-    catch
-        _Class:_Reason -> exception
-    end.

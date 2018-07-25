@@ -5,41 +5,49 @@
 -export([enqueue/2, dequeue/1]).
 -export([map/2]).
 -export([is_empty/1]).
+-export([size/1]).
+
+-compile({no_auto_import, [size/1]}).
 
 %% API
 create() ->
     ets:new(?MODULE, [public, ordered_set, {write_concurrency, true}]).
 
-destroy(EtsId) ->
-    true = ets:delete(EtsId),
+destroy(QueueId) ->
+    true = ets:delete(QueueId),
     ok.
 
-enqueue(EtsId, Item) ->
-    true = ets:insert(EtsId, Item).
+enqueue(QueueId, Item) ->
+    true = ets:insert(QueueId, Item).
 
-dequeue(EtsId) ->
-    Key  = ets:first(EtsId),
-    Item = ets:lookup(EtsId, Key),
-    true = ets:delete(EtsId, Key),
+dequeue(QueueId) ->
+    Key  = ets:first(QueueId),
+    Item = ets:lookup(QueueId, Key),
+    true = ets:delete(QueueId, Key),
     Item.
 
-map(EtsId, Predicate) ->
-    map(EtsId, Predicate, ets:first(EtsId)).
+map(QueueId, Predicate) ->
+    map(QueueId, Predicate, ets:first(QueueId)).
 
-map(_EtsId, _Predicate, '$end_of_table') ->
+map(_QueueId, _Predicate, '$end_of_table') ->
     ok;
-map(EtsId, Predicate, Key) ->
-    _ = case ets:lookup(EtsId, Key) of
+map(QueueId, Predicate, Key) ->
+    _ = case ets:lookup(QueueId, Key) of
         [{_Key, Item}] ->
             case Predicate(Item) of
-                ok        -> ets:delete(EtsId, Key);
-                error     -> ok;
-                exception -> ets:delete(EtsId, Key) %% because queue overflow
+                ok      -> ets:delete(QueueId, Key);
+                keep    -> ok
             end;
         _ ->
-            ets:delete(EtsId, Key)
+            ets:delete(QueueId, Key)
     end,
-    map(EtsId, Predicate, ets:first(EtsId)).
+    map(QueueId, Predicate, ets:first(QueueId)).
 
-is_empty(EtsId) ->
-    ets:info(EtsId, size) =:= 0.
+is_empty(QueueId) ->
+    size(QueueId) =:= 0.
+
+size(QueueId) ->
+    case ets:info(QueueId, size) of
+        undefined -> 0;
+        N -> N
+    end.

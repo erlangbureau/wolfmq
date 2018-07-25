@@ -3,7 +3,7 @@
 
 %% API
 -export([start_link/0]).
--export([start_worker/1]).
+-export([start_worker/2]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -14,19 +14,23 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-start_worker(QueueId) ->
-    gen_server:call(?MODULE, {start_worker, QueueId}).
+start_worker(QueueId, Opts) ->
+    gen_server:call(?MODULE, {start_worker, QueueId, Opts}).
 
 %% gen_server callbacks
 init(_Args) ->
     {ok, undefined}.
 
-handle_call({start_worker, QueueId}, _From, State) ->
-    Result = case wolfmq_meta:is_existing_queue(QueueId) of
+terminate(_Reason, _State) ->
+    ok.
+
+handle_call({start_worker, {GroupId, _QId} = QueueId, Opts}, _From, State) ->
+    Result = case wolfmq_queues_catalog:is_existing(QueueId) of
         true ->
             ok;
         false ->
-            {ok, _Pid} = wolfmq_workers_sup:start_worker(QueueId),
+            _ = wolfmq_sup:start_group(GroupId),
+            {ok, _Pid} = wolfmq_workers_sup:start_worker(GroupId, QueueId, Opts),
             ok
     end,
     {reply, Result, State};
@@ -41,6 +45,3 @@ handle_info(_Info, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-terminate(_Reason, _State) ->
-    ok.

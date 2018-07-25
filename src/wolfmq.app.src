@@ -1,7 +1,7 @@
 %% -*- mode: erlang -*-
 {application, wolfmq, [
-    {description, "Erlang message broker"},
-    {vsn, "0.3.0"},
+    {description, "Simple message broker for Erlang applications"},
+    {vsn, "0.5.0"},
     {modules, []},
     {registered, []},
     {applications, [
