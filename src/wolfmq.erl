@@ -4,6 +4,8 @@
 -export([push/2, push/3]).
 -export([size/1]).
 
+-compile({no_auto_import, [size/1]}).
+
 %% API
 push(QueueId, Msg) ->
     push(QueueId, Msg, #{}).
@@ -23,7 +25,7 @@ push({GroupId, _QId} = QueueId, Msg, Opts) when is_atom(GroupId) ->
 push(QueueId, Msg, Opts) ->
     push({wolfmq_default_group, QueueId}, Msg, Opts).
 
-size(QueueId) ->
+size({GroupId, _QId} = QueueId) when is_atom(GroupId) ->
     case wolfmq_queues_catalog:is_existing(QueueId) of
         true ->
             Meta = wolfmq_queues_catalog:get_meta(QueueId),
@@ -31,7 +33,9 @@ size(QueueId) ->
             wolfmq_queue:size(InternalQueueId);
         false ->
             0
-    end.
+    end;
+size(QueueId) ->
+    size({wolfmq_default_group, QueueId}).
 
 %% internal
 add_to_queue(ExternalQueueId, Msgs) when is_list(Msgs) ->
