@@ -1,0 +1,7 @@
+/.rebar
+/.erlang.mk
+/ebin
+/.eunit
+/wolfmq.d
+*.swp
+/logs/
