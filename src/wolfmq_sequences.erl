@@ -17,14 +17,11 @@ create(SeqId) ->
     ok.
 
 next(SeqId) ->
-    ets:update_counter(?MODULE, SeqId, {2,1}).
+    ets:update_counter(?MODULE, SeqId, {2, 1}).
 
 delete(SeqId) ->
     _ = ets:delete(?MODULE, SeqId),
     ok.
 
 is_existing(SeqId) ->
-    case ets:lookup(?MODULE, SeqId) of
-        [_] -> true;
-        []  -> false
-    end.
+    ets:member(?MODULE, SeqId).

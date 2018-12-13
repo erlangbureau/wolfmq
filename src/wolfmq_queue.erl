@@ -21,10 +21,8 @@ enqueue(QueueId, Item) ->
     true = ets:insert(QueueId, Item).
 
 dequeue(QueueId) ->
-    Key  = ets:first(QueueId),
-    Item = ets:lookup(QueueId, Key),
-    true = ets:delete(QueueId, Key),
-    Item.
+    Key = ets:first(QueueId),
+    ets:take(QueueId, Key).
 
 map(QueueId, Predicate) ->
     map(QueueId, Predicate, ets:first(QueueId)).

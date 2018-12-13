@@ -25,15 +25,14 @@ terminate(_Reason, _State) ->
     ok.
 
 handle_call({start_worker, {GroupId, _QId} = QueueId, Opts}, _From, State) ->
-    Result = case wolfmq_queues_catalog:is_existing(QueueId) of
+    _ = case wolfmq_queues_catalog:is_existing(QueueId) of
         true ->
             ok;
         false ->
             _ = wolfmq_sup:start_group(GroupId),
-            {ok, _Pid} = wolfmq_workers_sup:start_worker(GroupId, QueueId, Opts),
-            ok
+            {ok, _Pid} = wolfmq_workers_sup:start_worker(GroupId, QueueId, Opts)
     end,
-    {reply, Result, State};
+    {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ignore, State}.
 

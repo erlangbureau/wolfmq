@@ -10,7 +10,6 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
--define(T, ?MODULE).
 -record(state, {
     heartbeat_timer,
     idle_timer,
@@ -34,15 +33,15 @@ force_processing(Pid) ->
 
 %% gen_server callbacks
 init([ExternalQueueId, Opts]) ->
-    {ok, HeartbeatTimeout}  = application:get_env(wolfmq, heartbeat_timeout),
-    {ok, IdleTimeout}       = application:get_env(wolfmq, idle_timeout),
-    InternalQueueId         = wolfmq_queue:create(),
+    HeartbeatTimeout    = get_timeout_env(heartbeat_timeout, 1),
+    IdleTimeout         = get_timeout_env(idle_timeout, 10),
+    InternalQueueId     = wolfmq_queue:create(),
     ok = wolfmq_queues_catalog:insert(ExternalQueueId, {InternalQueueId, self()}),
-    {ok, HeartbeatTimerRef} = timer:send_after(0, process_queue),
+    HeartbeatTimerRef = start_heartbeat_timer(0),
     State = #state{
         heartbeat_timer     = HeartbeatTimerRef,
-        heartbeat_timeout   = timer:seconds(HeartbeatTimeout),
-        idle_timeout        = timer:seconds(IdleTimeout),
+        heartbeat_timeout   = HeartbeatTimeout,
+        idle_timeout        = IdleTimeout,
         external_queue_id   = ExternalQueueId,
         internal_queue_id   = InternalQueueId,
         handler             = maps:get(handler, Opts, wolfmq_task_handler)
@@ -74,17 +73,17 @@ handle_info(process_queue, State) ->
     HeartbeatTimeout    = State#state.heartbeat_timeout,
     InternalQueueId     = State#state.internal_queue_id,
     Handler             = State#state.handler,
-    {ok, cancel} = timer:cancel(HeartbeatTimerRef),
+    _ = stop_heartbeat_timer(HeartbeatTimerRef),
     IdleTimerRef2 = case wolfmq_queue:is_empty(InternalQueueId) of
         true ->
             start_idle_timer(IdleTimerRef1, IdleTimeout);
         false ->
-            {ok, cancel} = cancel_idle_timer(IdleTimerRef1),
+            _ = cancel_idle_timer(IdleTimerRef1),
             HandleFun = fun Handler:handle_message/1,
             ok = wolfmq_queue:map(InternalQueueId, HandleFun),
             undefined
     end,
-    {ok, HeartbeatTimerRef2} = timer:send_after(HeartbeatTimeout, process_queue),
+    HeartbeatTimerRef2 = start_heartbeat_timer(HeartbeatTimeout),
     Sate2 = State#state{
         heartbeat_timer = HeartbeatTimerRef2,
         idle_timer      = IdleTimerRef2
@@ -99,13 +98,22 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% internal
+get_timeout_env(Name, Default) ->
+    Timeout = application:get_env(wolfmq, Name, Default),
+    timer:seconds(Timeout).
+
+start_heartbeat_timer(Timeout) ->
+    erlang:send_after(Timeout, self(), process_queue).
+
+stop_heartbeat_timer(TimerRef) ->
+    erlang:cancel_timer(TimerRef).
+
 start_idle_timer(undefined, Timeout) ->
-    {ok, IdleTimerRef2} = timer:send_after(Timeout, stop),
-    IdleTimerRef2;
+    erlang:send_after(Timeout, self(), stop);
 start_idle_timer(OldTimer, _Timeout) ->
     OldTimer.
 
 cancel_idle_timer(undefined) ->
-    {ok, cancel};
+    false;
 cancel_idle_timer(TimerRef) ->
-    timer:cancel(TimerRef).
+    erlang:cancel_timer(TimerRef).
