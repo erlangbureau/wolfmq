@@ -23,7 +23,7 @@ push({GroupId, _QId} = QueueId, Msg, Opts) when is_atom(GroupId) ->
     end,
     add_to_queue(QueueId, Msg);
 push(QueueId, Msg, Opts) ->
-    push({wolfmq_default_group, QueueId}, Msg, Opts).
+    push({default, QueueId}, Msg, Opts).
 
 size({GroupId, _QId} = QueueId) when is_atom(GroupId) ->
     case wolfmq_queues_catalog:is_existing(QueueId) of
@@ -35,7 +35,7 @@ size({GroupId, _QId} = QueueId) when is_atom(GroupId) ->
             0
     end;
 size(QueueId) ->
-    size({wolfmq_default_group, QueueId}).
+    size({default, QueueId}).
 
 %% internal
 add_to_queue(ExternalQueueId, Msgs) when is_list(Msgs) ->
