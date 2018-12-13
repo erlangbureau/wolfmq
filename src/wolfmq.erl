@@ -15,11 +15,7 @@ push({GroupId, _QId} = QueueId, Msg, Opts) when is_atom(GroupId) ->
         true    ->
             ok;
         false   ->
-            ok = wolfmq_mgr:start_worker(QueueId, Opts),
-            case wolfmq_sequences:is_existing(QueueId) of
-                true    -> ok;
-                false   -> wolfmq_sequences:create(QueueId)
-            end
+            wolfmq_mgr:start_worker(QueueId, Opts)
     end,
     add_to_queue(QueueId, Msg);
 push(QueueId, Msg, Opts) ->
