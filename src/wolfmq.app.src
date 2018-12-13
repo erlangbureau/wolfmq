@@ -1,7 +1,7 @@
 %% -*- mode: erlang -*-
 {application, wolfmq, [
     {description, "Simple message broker for Erlang applications"},
-    {vsn, "0.5.1"},
+    {vsn, "0.5.2"},
     {modules, []},
     {registered, []},
     {applications, [
@@ -9,8 +9,5 @@
         stdlib
     ]},
     {mod, {wolfmq_app, []}},
-    {env, [
-        {heartbeat_timeout, 1},
-        {idle_timeout, 10}
-    ]}
+    {env, []}
 ]}.
