@@ -3,6 +3,17 @@ WolfMQ
 
 WolfMQ is a small and fast Erlang message broker and queued task processor
 
+Description
+===========
+
+**Wolfmq features:**
+* Automatic creation and closing of the queues
+* Use any term as a queue id
+* Run different queues on different supervisors
+* By default, the queue is a task processor, but you can change behaviour
+
+
+
 Getting Started
 ===============
 
