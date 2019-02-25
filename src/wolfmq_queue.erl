@@ -33,8 +33,9 @@ map(QueueId, Predicate, Key) ->
     _ = case ets:lookup(QueueId, Key) of
         [{_Key, Item}] ->
             case Predicate(Item) of
-                ok      -> ets:delete(QueueId, Key);
-                keep    -> ok
+                ok      -> ets:delete(QueueId, Key); %% TODO backward compatibility
+                delete  -> ets:delete(QueueId, Key);
+                keep    -> ignore
             end;
         _ ->
             ets:delete(QueueId, Key)
