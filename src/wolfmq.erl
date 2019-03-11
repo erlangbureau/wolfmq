@@ -3,6 +3,7 @@
 %% API
 -export([push/2, push/3]).
 -export([size/1]).
+-export([queue_id/0]).
 
 -compile({no_auto_import, [size/1]}).
 
@@ -32,6 +33,10 @@ size({GroupId, _QId} = QueueId) when is_atom(GroupId) ->
     end;
 size(QueueId) ->
     size({default, QueueId}).
+
+%% call it only from inside the queue
+queue_id() ->
+    wolfmq_worker:get_queue_id().
 
 %% internal
 add_to_queue(ExternalQueueId, Msgs) when is_list(Msgs) ->

@@ -4,6 +4,7 @@
 %% API
 -export([start_link/1, stop/1]).
 -export([force_processing/1]).
+-export([get_queue_id/0]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -31,12 +32,16 @@ force_processing(Pid) ->
     Pid ! process_queue,
     ok.
 
+get_queue_id() ->
+    erlang:get(external_queue_id).
+
 %% gen_server callbacks
 init([ExternalQueueId, Opts]) ->
     HeartbeatTimeout    = get_timeout_env(heartbeat_timeout, 1),
     IdleTimeout         = get_timeout_env(idle_timeout, 10),
     InternalQueueId     = wolfmq_queue:create(),
     ok = wolfmq_queues_catalog:insert(ExternalQueueId, {InternalQueueId, self()}),
+    ok = save_queue_id(ExternalQueueId),
     HeartbeatTimerRef = start_heartbeat_timer(0),
     State = #state{
         heartbeat_timer     = HeartbeatTimerRef,
@@ -98,6 +103,10 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% internal
+save_queue_id(ExternalQueueId) ->
+    _ = erlang:put(external_queue_id, ExternalQueueId),
+    ok.
+
 get_timeout_env(Name, Default) ->
     Timeout = application:get_env(wolfmq, Name, Default),
     timer:seconds(Timeout).
