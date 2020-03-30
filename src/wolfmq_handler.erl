@@ -3,4 +3,4 @@
 -callback handle_message(Msg) -> Result
 when
     Msg     :: term(),
-    Result  :: ok.
+    Result  :: keep | delete.
