@@ -43,19 +43,19 @@ execute({Module, Fun, Args}) ->
         ok -> ok;
         Err -> {error, Err}
     catch
-        Class:Reason -> {exception, Class, Reason, erlang:get_stacktrace()}
+        Class:Reason:Stacktrace -> {exception, Class, Reason, Stacktrace}
     end;
 execute({Fun, Args}) ->
     try erlang:apply(Fun, Args) of
         ok -> ok;
         Err -> {error, Err}
     catch
-        Class:Reason -> {exception, Class, Reason, erlang:get_stacktrace()}
+        Class:Reason:Stacktrace -> {exception, Class, Reason, Stacktrace}
     end;
 execute(Fun) when is_function(Fun) ->
     try Fun() of
         ok -> ok;
         Err -> {error, Err}
     catch
-        Class:Reason -> {exception, Class, Reason, erlang:get_stacktrace()}
+        Class:Reason:Stacktrace -> {exception, Class, Reason, Stacktrace}
     end.
